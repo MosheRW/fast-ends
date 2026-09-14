@@ -25,6 +25,9 @@ import {
 } from '@/lib/fasts';
 import { formatClock, formatDay, formatCountdown, formatUntil } from '@/lib/format';
 import { useLang } from './lang';
+import { useTheme } from './theme';
+import type { Lang, TFunc } from '@/lib/i18n';
+import type { ViewState } from '@/lib/fasts';
 
 const LS_LOC = 'eotf.location';
 const LS_OP = 'eotf.opinion';
@@ -52,6 +55,7 @@ function readOverrides(): Overrides {
 
 export default function FastCountdown() {
   const { lang, t, toggle } = useLang();
+  const { pref: themePref, cycle: cycleTheme } = useTheme();
 
   const [mounted, setMounted] = useState(false);
   const [loc, setLoc] = useState<StoredLocation>(DEFAULT_LOCATION);
@@ -61,6 +65,7 @@ export default function FastCountdown() {
   const [manualInput, setManualInput] = useState('');
   const [manualError, setManualError] = useState('');
   const [geoBusy, setGeoBusy] = useState(false);
+  const [focus, setFocus] = useState(false);
 
   const offsetRef = useRef(0); // dev date offset (ms)
   const anchorRef = useRef(Date.now()); // stable anchor for the occurrence window
@@ -98,6 +103,37 @@ export default function FastCountdown() {
     const id = setInterval(() => setNowMs(Date.now() + offsetRef.current), 1000);
     return () => clearInterval(id);
   }, []);
+
+  // Full-screen focus mode.
+  function enterFocus() {
+    setFocus(true);
+    try {
+      document.documentElement.requestFullscreen?.();
+    } catch {}
+  }
+  function exitFocus() {
+    setFocus(false);
+    try {
+      if (document.fullscreenElement) document.exitFullscreen?.();
+    } catch {}
+  }
+  // Leaving browser fullscreen (e.g. via Esc) also leaves focus mode.
+  useEffect(() => {
+    const onFsChange = () => {
+      if (!document.fullscreenElement) setFocus(false);
+    };
+    document.addEventListener('fullscreenchange', onFsChange);
+    return () => document.removeEventListener('fullscreenchange', onFsChange);
+  }, []);
+  // Esc closes focus mode even when real fullscreen was denied.
+  useEffect(() => {
+    if (!focus) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') exitFocus();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [focus]);
 
   function persistLoc(s: StoredLocation) {
     try {
@@ -170,6 +206,9 @@ export default function FastCountdown() {
   }, [hebLoc]);
 
   const view = useMemo(() => pickState(occs, now), [occs, now]);
+  const primary = mounted ? computePrimary(view, opinionId, nowMs, t, lang) : null;
+
+  const themeIcon = themePref === 'light' ? '☀️' : themePref === 'dark' ? '🌙' : '🌗';
 
   const locBar = (
     <div className="locbar">
@@ -219,10 +258,29 @@ export default function FastCountdown() {
     <main className="stage">
       <div className="stars" aria-hidden />
       <div className="content">
-        <button className="lang-toggle" onClick={toggle} aria-label="language">
-          {t('langOther')}
-        </button>
+        <div className="topbar">
+          <button className="lang-toggle" onClick={toggle} aria-label="language">
+            {t('langOther')}
+          </button>
+          <div className="topbar-right">
+            <button className="icon-btn" onClick={cycleTheme} aria-label={t('themeLabel')} title={t('themeLabel')}>
+              {themeIcon}
+            </button>
+            <button
+              className="icon-btn"
+              onClick={enterFocus}
+              aria-label={t('fullscreenLabel')}
+              title={t('fullscreenLabel')}
+              disabled={!primary}
+            >
+              ⛶
+            </button>
+          </div>
+        </div>
         <header className="head">
+          <div className="logo" aria-hidden>
+            <Hourglass />
+          </div>
           <h1 className="brand">{t('brand')}</h1>
           {mounted && (
             <p className="hebdate" aria-live="polite">
@@ -250,7 +308,78 @@ export default function FastCountdown() {
           <p className="muted small">{t('disclaimer')}</p>
         </footer>
       </div>
+
+      {focus && primary && <FocusOverlay primary={primary} onClose={exitFocus} />}
     </main>
+  );
+}
+
+// ---------- primary countdown + focus overlay ----------
+
+type Primary = { title: string; label: string; ms: number; ended: boolean };
+
+function computePrimary(view: ViewState, opinionId: string, nowMs: number, t: TFunc, lang: Lang): Primary | null {
+  if (view.kind === 'active') {
+    const occ = view.occ;
+    const sel = occ.ends.find((e) => e.id === opinionId) ?? occ.ends[0];
+    const ms = sel.time.getTime() - nowMs;
+    return {
+      title: fastName(occ.desc, lang),
+      label: `${t('endsIn')} (${opinionText(sel.id, lang).short})`,
+      ms,
+      ended: ms <= 0,
+    };
+  }
+  if (view.kind === 'pre') {
+    return {
+      title: fastName(view.occ.desc, lang),
+      label: t('fastBeginsIn'),
+      ms: view.occ.start.getTime() - nowMs,
+      ended: false,
+    };
+  }
+  if (view.kind === 'none' && view.next) {
+    return {
+      title: fastName(view.next.desc, lang),
+      label: t('fastBeginsIn'),
+      ms: view.next.start.getTime() - nowMs,
+      ended: false,
+    };
+  }
+  return null;
+}
+
+function FocusOverlay({ primary, onClose }: { primary: Primary; onClose: () => void }) {
+  const { t } = useLang();
+  return (
+    <div className="focus" role="dialog" aria-modal="true">
+      <div className="stars" aria-hidden />
+      <button className="focus-exit icon-btn" onClick={onClose} aria-label={t('exit')} title={t('exit')}>
+        ✕
+      </button>
+      <div className="focus-inner">
+        <p className="focus-title">{primary.title}</p>
+        <p className="focus-label">{primary.label}</p>
+        <div className="focus-cd" role="timer" aria-live="off">
+          {primary.ended ? t('fastEnded') : formatCountdown(primary.ms)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Hourglass() {
+  return (
+    <svg viewBox="0 0 32 32" width="30" height="30" role="img">
+      <g stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none">
+        <line x1="9" y1="6.5" x2="23" y2="6.5" />
+        <line x1="9" y1="25.5" x2="23" y2="25.5" />
+        <path d="M10 7 C10 12 16 14 16 16 C16 18 10 20 10 25" />
+        <path d="M22 7 C22 12 16 14 16 16 C16 18 22 20 22 25" />
+      </g>
+      <path d="M12 9 L20 9 L16 14 Z" fill="currentColor" />
+      <path d="M13.6 23.4 L18.4 23.4 L16 19 Z" fill="currentColor" opacity="0.75" />
+    </svg>
   );
 }
 

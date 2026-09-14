@@ -26,15 +26,59 @@ html {
   --danger: #ff9a9a;
   --radius: 18px;
   --maxw: 680px;
+  --bg:
+    radial-gradient(120% 90% at 50% 118%, var(--glow) 0%, transparent 55%),
+    radial-gradient(140% 100% at 50% 130%, var(--horizon) 0%, transparent 60%),
+    linear-gradient(180deg, var(--night-top) 0%, var(--night-mid) 62%, #120c22 100%);
+  --stars-display: block;
+  --cd-glow: 0 0 40px rgba(255, 200, 110, 0.35);
+  color-scheme: dark;
+}
+
+/* ----- light theme (forced, and system default) ----- */
+:root[data-theme='light'] {
+  --night-top: #cfe0f7;
+  --night-mid: #e9f0fb;
+  --horizon: #f6ece0;
+  --glow: #ffe9c9;
+  --ink: #1b2233;
+  --muted: #59637d;
+  --panel: rgba(255, 255, 255, 0.74);
+  --panel-brd: rgba(40, 60, 110, 0.16);
+  --accent: #b26a00;
+  --accent-2: #b5651d;
+  --calm: #1f7a6c;
+  --danger: #c0392b;
+  --bg: linear-gradient(180deg, #cfe0f7 0%, #e9f0fb 55%, #fdf3e4 100%);
+  --stars-display: none;
+  --cd-glow: 0 2px 16px rgba(190, 130, 30, 0.18);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']):not([data-theme='light']) {
+    --night-top: #cfe0f7;
+    --night-mid: #e9f0fb;
+    --horizon: #f6ece0;
+    --glow: #ffe9c9;
+    --ink: #1b2233;
+    --muted: #59637d;
+    --panel: rgba(255, 255, 255, 0.74);
+    --panel-brd: rgba(40, 60, 110, 0.16);
+    --accent: #b26a00;
+    --accent-2: #b5651d;
+    --calm: #1f7a6c;
+    --danger: #c0392b;
+    --bg: linear-gradient(180deg, #cfe0f7 0%, #e9f0fb 55%, #fdf3e4 100%);
+    --stars-display: none;
+    --cd-glow: 0 2px 16px rgba(190, 130, 30, 0.18);
+    color-scheme: light;
+  }
 }
 
 body {
   min-height: 100dvh;
   color: var(--ink);
-  background:
-    radial-gradient(120% 90% at 50% 118%, var(--glow) 0%, transparent 55%),
-    radial-gradient(140% 100% at 50% 130%, var(--horizon) 0%, transparent 60%),
-    linear-gradient(180deg, var(--night-top) 0%, var(--night-mid) 62%, #120c22 100%);
+  background: var(--bg);
   background-attachment: fixed;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   line-height: 1.45;
@@ -47,6 +91,7 @@ img {
 
 /* ===== starfield ===== */
 .stars {
+  display: var(--stars-display);
   position: fixed;
   inset: 0;
   pointer-events: none;
@@ -93,25 +138,46 @@ img {
   gap: clamp(16px, 3vw, 24px);
 }
 
-.lang-toggle {
-  position: absolute;
-  top: 0;
-  inset-inline-end: 0;
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.lang-toggle,
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-width: 40px;
-  min-height: 32px;
+  min-height: 40px;
   padding: 5px 12px;
   border-radius: 999px;
   border: 1px solid var(--panel-brd);
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--panel);
   color: var(--muted);
-  font-size: 0.82rem;
+  font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
-  z-index: 2;
+  line-height: 1;
 }
-.lang-toggle:hover {
+.icon-btn {
+  padding: 5px;
+  font-size: 1.1rem;
+}
+.lang-toggle:hover,
+.icon-btn:hover {
   color: var(--ink);
   border-color: var(--accent);
+}
+.icon-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .head {
@@ -120,6 +186,10 @@ img {
   flex-direction: column;
   gap: 6px;
   align-items: center;
+}
+.logo {
+  color: var(--accent);
+  line-height: 0;
 }
 .brand {
   font-size: clamp(1.1rem, 4.5vw, 1.5rem);
@@ -197,7 +267,7 @@ img {
   line-height: 1;
   font-size: clamp(3rem, 17vw, 6.5rem);
   color: var(--accent);
-  text-shadow: 0 0 40px rgba(255, 200, 110, 0.35);
+  text-shadow: var(--cd-glow);
   margin: 6px 0 8px;
   word-break: keep-all;
   direction: ltr; /* keep HH:MM:SS left-to-right even in RTL layout */
@@ -468,6 +538,54 @@ img {
 .foot {
   text-align: center;
   padding: 4px 6px 8px;
+}
+
+/* ===== full-screen focus mode ===== */
+.focus {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: var(--bg);
+  background-attachment: fixed;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(16px, 5vw, 48px);
+  padding-top: max(clamp(16px, 5vw, 48px), env(safe-area-inset-top));
+}
+.focus-exit {
+  position: absolute;
+  top: max(14px, env(safe-area-inset-top));
+  inset-inline-end: max(14px, env(safe-area-inset-right));
+  z-index: 2;
+}
+.focus-inner {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(8px, 2vw, 18px);
+  max-width: 100%;
+}
+.focus-title {
+  font-size: clamp(1.4rem, 6vw, 2.4rem);
+  font-weight: 700;
+  color: var(--ink);
+}
+.focus-label {
+  color: var(--muted);
+  font-size: clamp(0.9rem, 3.5vw, 1.2rem);
+}
+.focus-cd {
+  direction: ltr;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  line-height: 1;
+  font-size: clamp(3.5rem, 20vw, 11rem);
+  color: var(--accent);
+  text-shadow: var(--cd-glow);
+  word-break: keep-all;
 }
 
 /* wider screens: give the reference rows room for the tag inline */
