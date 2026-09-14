@@ -249,12 +249,10 @@ export default function FastCountdown() {
   const view = useMemo(() => pickState(occs, now), [occs, now]);
   const primary = mounted ? computePrimary(view, opinionId, nowMs, t, lang) : null;
 
-  const themeIcon = themePref === 'light' ? '☀️' : themePref === 'dark' ? '🌙' : '🌗';
-
   const locBar = (
     <div className="locbar">
       <span className="pin" aria-hidden>
-        📍
+        <PinIcon />
       </span>
       <span>{locationLabel(loc, lang)}</span>
       <button className="link" onClick={() => setShowManual((v) => !v)}>
@@ -288,7 +286,7 @@ export default function FastCountdown() {
           ))}
         </datalist>
         <button type="button" className="link loc-link" onClick={requestGeo} disabled={geoBusy}>
-          📍 {geoBusy ? t('locating') : t('useMyLocation')}
+          <PinIcon /> {geoBusy ? t('locating') : t('useMyLocation')}
         </button>
         {manualError && <p className="error small">{manualError}</p>}
       </form>
@@ -297,7 +295,6 @@ export default function FastCountdown() {
 
   return (
     <main className="stage">
-      <div className="stars" aria-hidden />
       <div className="content">
         <div className="topbar">
           <button className="lang-toggle" onClick={toggle} aria-label="language">
@@ -305,7 +302,7 @@ export default function FastCountdown() {
           </button>
           <div className="topbar-right">
             <button className="icon-btn" onClick={cycleTheme} aria-label={t('themeLabel')} title={t('themeLabel')}>
-              {themeIcon}
+              <ThemeIcon pref={themePref} />
             </button>
             <button
               className="icon-btn"
@@ -314,7 +311,7 @@ export default function FastCountdown() {
               title={t('fullscreenLabel')}
               disabled={!primary}
             >
-              ⛶
+              <ExpandIcon />
             </button>
           </div>
         </div>
@@ -414,9 +411,8 @@ function FocusOverlay({
   const { t } = useLang();
   return (
     <div className="focus" role="dialog" aria-modal="true">
-      <div className="stars" aria-hidden />
       <button className="focus-exit icon-btn" onClick={onClose} aria-label={t('exit')} title={t('exit')}>
-        ✕
+        <CloseIcon />
       </button>
       <div className="focus-inner" onDoubleClick={onToggle}>
         <h2 className="focus-title">{primary.title}</h2>
@@ -427,7 +423,7 @@ function FocusOverlay({
       </div>
       {orientSupported && (
         <button className="focus-orient" onClick={onRotate} aria-label={t('rotate')} title={t('rotate')}>
-          ⟳
+          <RotateIcon />
         </button>
       )}
     </div>
@@ -445,6 +441,77 @@ function Hourglass() {
       </g>
       <path d="M12 9 L20 9 L16 14 Z" fill="currentColor" />
       <path d="M13.6 23.4 L18.4 23.4 L16 19 Z" fill="currentColor" opacity="0.75" />
+    </svg>
+  );
+}
+
+// ---------- inline UI icons (stroke = currentColor) ----------
+
+const svgProps = {
+  viewBox: '0 0 24 24',
+  fill: 'none',
+  stroke: 'currentColor',
+  strokeWidth: 1.7,
+  strokeLinecap: 'round' as const,
+  strokeLinejoin: 'round' as const,
+  'aria-hidden': true,
+};
+
+function SunIcon() {
+  return (
+    <svg {...svgProps}>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+    </svg>
+  );
+}
+function MoonIcon() {
+  return (
+    <svg {...svgProps}>
+      <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z" />
+    </svg>
+  );
+}
+function HalfMoonIcon() {
+  return (
+    <svg {...svgProps}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 3a9 9 0 0 1 0 18Z" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+function ThemeIcon({ pref }: { pref: 'system' | 'light' | 'dark' }) {
+  if (pref === 'light') return <SunIcon />;
+  if (pref === 'dark') return <MoonIcon />;
+  return <HalfMoonIcon />;
+}
+function ExpandIcon() {
+  return (
+    <svg {...svgProps}>
+      <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />
+    </svg>
+  );
+}
+function CloseIcon() {
+  return (
+    <svg {...svgProps}>
+      <path d="M6 6l12 12M18 6L6 18" />
+    </svg>
+  );
+}
+function RotateIcon() {
+  return (
+    <svg {...svgProps}>
+      <path d="M4 12a8 8 0 1 1 2.3 5.6" />
+      <path d="M4 20v-4h4" />
+    </svg>
+  );
+}
+function PinIcon() {
+  return (
+    <svg {...svgProps} width="14" height="14">
+      <path d="M12 21s-6-5.7-6-10a6 6 0 1 1 12 0c0 4.3-6 10-6 10Z" />
+      <circle cx="12" cy="11" r="2" />
     </svg>
   );
 }
