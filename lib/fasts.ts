@@ -44,14 +44,14 @@ export type TzeitOpinion = {
 
 export const OPINIONS: TzeitOpinion[] = [
   {
-    id: 'deg18',
-    short: { he: '18°', en: '18°' },
-    label: { he: '18°', en: '18°' },
+    id: 'bhs',
+    short: { he: '13.5 דק׳ לפני 7.083°', en: '13.5 min before 7.083°' },
+    label: { he: '13.5 דק׳ לפני צאת 7.083°', en: '13.5 min before 7.083° nightfall' },
     note: {
-      he: 'השמש 18° מתחת לאופק.',
-      en: 'Sun 18° below the horizon.',
+      he: 'בין השמשות דרבנו תם — 13.5 דקות לפני צאת הכוכבים 7.083°.',
+      en: 'Rabbeinu Tam bein hashmashos — 13.5 minutes before 7.083° nightfall.',
     },
-    compute: (z) => z.tzeit(18),
+    compute: (z) => z.beinHaShmashos(),
   },
   {
     id: 'deg645',
@@ -75,7 +75,7 @@ export const OPINIONS: TzeitOpinion[] = [
   },
 ];
 
-export const DEFAULT_OPINION = 'deg18';
+export const DEFAULT_OPINION = 'bhs';
 
 export function opinionById(id: string): TzeitOpinion {
   return OPINIONS.find((o) => o.id === id) ?? OPINIONS[0];
