@@ -44,48 +44,38 @@ export type TzeitOpinion = {
 
 export const OPINIONS: TzeitOpinion[] = [
   {
-    id: 'stars3',
-    short: { he: '3 כוכבים', en: '3 stars' },
-    label: { he: '3 כוכבים · 8.5°', en: '3 stars · 8.5°' },
+    id: 'deg18',
+    short: { he: '18°', en: '18°' },
+    label: { he: '18°', en: '18°' },
     note: {
-      he: 'השמש 8.5° מתחת לאופק — שלושה כוכבים קטנים. שיטה מקובלת ונפוצה.',
-      en: 'Sun 8.5° below the horizon — three small stars. A common, mainstream tzeit.',
+      he: 'השמש 18° מתחת לאופק.',
+      en: 'Sun 18° below the horizon.',
     },
-    compute: (z) => z.tzeit(8.5),
+    compute: (z) => z.tzeit(18),
   },
   {
-    id: 'medium',
-    short: { he: '3 בינוניים', en: '3 medium stars' },
-    label: { he: '3 כוכבים בינוניים · 7.083°', en: '3 medium stars · 7.083°' },
+    id: 'deg645',
+    short: { he: '6.45°', en: '6.45°' },
+    label: { he: '6.45°', en: '6.45°' },
     note: {
-      he: 'השמש 7.083° מתחת לאופק — שלושה כוכבים בינוניים (מעט מוקדם יותר).',
-      en: 'Sun 7.083° below the horizon — three medium stars (a little earlier).',
+      he: 'השמש 6.45° מתחת לאופק.',
+      en: 'Sun 6.45° below the horizon.',
     },
-    compute: (z) => z.tzeit(7.083),
-  },
-  {
-    id: 'min42',
-    short: { he: '42 דקות', en: '42 minutes' },
-    label: { he: '42 דקות אחרי השקיעה', en: '42 min after sunset' },
-    note: {
-      he: 'שיטת זמן קבוע נפוצה: 42 דקות אחרי השקיעה.',
-      en: 'A widely used fixed-time custom: 42 minutes after sunset.',
-    },
-    compute: (z) => z.sunsetOffset(42, true),
+    compute: (z) => z.tzeit(6.45),
   },
   {
     id: 'rt72',
     short: { he: 'רבנו תם', en: 'Rabbeinu Tam' },
-    label: { he: 'רבנו תם · 72 דקות', en: 'Rabbeinu Tam · 72 min' },
+    label: { he: 'רבנו תם · 72 דק׳', en: 'Rabbeinu Tam · 72 min' },
     note: {
-      he: 'מחמיר — 72 דקות אחרי השקיעה.',
-      en: 'Stringent — 72 minutes after sunset.',
+      he: 'רבנו תם — 72 דקות אחרי השקיעה.',
+      en: 'Rabbeinu Tam — 72 minutes after sunset.',
     },
     compute: (z) => z.sunsetOffset(72, true),
   },
 ];
 
-export const DEFAULT_OPINION = 'stars3';
+export const DEFAULT_OPINION = 'deg18';
 
 export function opinionById(id: string): TzeitOpinion {
   return OPINIONS.find((o) => o.id === id) ?? OPINIONS[0];
@@ -151,7 +141,8 @@ export function getFastOccurrences(loc: Location, from: Date, to: Date): FastOcc
     out.push({
       key: `${desc}-${gregDate.toISOString().slice(0, 10)}`,
       desc,
-      hebrew: { he: ev.getDate().render('he'), en: ev.getDate().render('en') },
+      // Hebrew date always in Hebrew letters (gematriya), never Arabic numerals.
+      hebrew: { he: ev.getDate().renderGematriya(true), en: ev.getDate().render('en') },
       gregDate,
       isMajor,
       start,
@@ -193,9 +184,13 @@ export function computeState(loc: Location, now: Date): ViewState {
 
 export const OCCURRENCE_WINDOW = { back: 2 * DAY, forward: 400 * DAY };
 
-/** Today's Hebrew date in the chosen language, e.g. "3rd of Tishrei, 5787". */
+/**
+ * Today's Hebrew date. In Hebrew it uses Hebrew letters (gematriya), e.g.
+ * "ג׳ תשרי תשפ״ז" — never Arabic numerals.
+ */
 export function hebrewDateString(now: Date, lang: Lang): string {
-  return new HDate(now).render(lang);
+  const hd = new HDate(now);
+  return lang === 'he' ? hd.renderGematriya(true) : hd.render('en');
 }
 
 /** Sunset & nightfall (primary opinion) for a plain, non-fast day. */
@@ -218,7 +213,7 @@ export function getFastDates(from: Date, to: Date): FastDateInfo[] {
   for (const ev of fastEvents(from, to)) {
     out.push({
       desc: ev.getDesc(),
-      hebrew: { he: ev.getDate().render('he'), en: ev.getDate().render('en') },
+      hebrew: { he: ev.getDate().renderGematriya(true), en: ev.getDate().render('en') },
       gregDate: ev.getDate().greg(),
       isMajor: Boolean(ev.getFlags() & flags.MAJOR_FAST),
     });

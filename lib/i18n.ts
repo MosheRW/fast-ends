@@ -46,7 +46,7 @@ const HE: Dict = {
   laterOpinion: 'שיטה מאוחרת יותר ({op}) מסתיימת בעוד {cd}.',
   fastBegan: 'הצום התחיל {day} בשעה {t}.',
   disclaimer:
-    'הזמנים מחושבים להכוונה בלבד — יש לאמת מול רב/פוסק מקומי. שיטות צאת הכוכבים המוצגות: שלושה כוכבים (8.5°), שלושה כוכבים בינוניים (7.083°), 42 דקות, ורבנו תם (72 דקות). שעון קיץ וגובה עשויים לשנות את הזמנים בכמה דקות.',
+    'הזמנים מחושבים להכוונה בלבד — יש לאמת מול רב/פוסק מקומי. שיטות צאת הכוכבים המוצגות: 18°, ‏6.45°, ורבנו תם (72 דקות). שעון קיץ וגובה עשויים לשנות את הזמנים בכמה דקות.',
   upcomingFasts: 'צומות קרובים',
   upcomingSub:
     'התאריכים זהים בכל מקום; זמני ההתחלה והסיום המדויקים תלויים במיקומכם ומופיעים בספירה החיה למעלה.',
@@ -95,7 +95,7 @@ const EN: Dict = {
   laterOpinion: 'A later opinion ({op}) ends in {cd}.',
   fastBegan: 'Fast began {day} at {t}.',
   disclaimer:
-    'Times are computed for guidance only — confirm with your local halachic authority. Nightfall opinions shown: three stars (8.5°), three medium stars (7.083°), 42 minutes, and Rabbeinu Tam (72 minutes). Daylight-saving and elevation can shift times by a few minutes.',
+    'Times are computed for guidance only — confirm with your local halachic authority. Nightfall opinions shown: 18°, 6.45°, and Rabbeinu Tam (72 minutes). Daylight-saving and elevation can shift times by a few minutes.',
   upcomingFasts: 'Upcoming fasts',
   upcomingSub:
     'Dates are the same everywhere; the exact start and end times depend on your location and appear in the live countdown above.',
