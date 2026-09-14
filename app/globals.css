@@ -675,8 +675,11 @@ img {
 
 /* wider screens: give the reference rows room for the tag inline */
 @media (min-width: 560px) {
+  /* Fixed fractions (no `auto` tag column) so the date column lands in the
+     same place on every row — otherwise the short "25 hr" tag on the major
+     fasts widens the flexible columns and shifts their dates. */
   .ref-row {
-    grid-template-columns: auto 1.4fr 1fr auto;
+    grid-template-columns: auto 1.4fr 1fr 1.2fr;
   }
   .ref-heb {
     grid-column: 3;
@@ -689,6 +692,7 @@ img {
   .ref-tag {
     grid-column: 4;
     grid-row: 1;
+    white-space: normal;
   }
 }
 
