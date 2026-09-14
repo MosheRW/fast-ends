@@ -89,6 +89,13 @@ html {
   color-scheme: dark;
 }
 
+/* English mode: prefer the Latin serif. Frank Ruhl Libre also ships a Latin
+   subset, so without this override English body/headings would still render in
+   Frank rather than Spectral. `lang` is set on <html> by LangProvider. */
+:root[lang='en'] {
+  --font-serif: var(--font-spectral), 'Spectral', var(--font-frank), 'Frank Ruhl Libre', Georgia, serif;
+}
+
 body {
   min-height: 100dvh;
   color: var(--ink);
