@@ -85,11 +85,33 @@ img {
   padding-right: max(clamp(16px, 4vw, 40px), env(safe-area-inset-right));
 }
 .content {
+  position: relative;
   width: 100%;
   max-width: var(--maxw);
   display: flex;
   flex-direction: column;
   gap: clamp(16px, 3vw, 24px);
+}
+
+.lang-toggle {
+  position: absolute;
+  top: 0;
+  inset-inline-end: 0;
+  min-width: 40px;
+  min-height: 32px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--panel-brd);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  z-index: 2;
+}
+.lang-toggle:hover {
+  color: var(--ink);
+  border-color: var(--accent);
 }
 
 .head {
@@ -178,6 +200,7 @@ img {
   text-shadow: 0 0 40px rgba(255, 200, 110, 0.35);
   margin: 6px 0 8px;
   word-break: keep-all;
+  direction: ltr; /* keep HH:MM:SS left-to-right even in RTL layout */
 }
 .countdown.begin {
   color: var(--accent-2);
@@ -239,11 +262,13 @@ img {
   font-size: 1.15rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+  direction: ltr;
 }
 .op-status {
   font-size: 0.8rem;
   color: var(--accent);
   font-variant-numeric: tabular-nums;
+  direction: ltr;
 }
 .opinion.past .op-status {
   color: var(--muted);
@@ -309,7 +334,15 @@ img {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  text-align: left;
+  text-align: start;
+}
+.loc-link {
+  align-self: flex-start;
+  font-weight: 600;
+}
+.loc-link:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 .manual-row {
   display: flex;
@@ -415,7 +448,7 @@ img {
   font-size: 0.75rem;
   color: var(--muted);
   white-space: nowrap;
-  text-align: right;
+  text-align: end;
 }
 
 /* ===== misc ===== */
@@ -448,7 +481,7 @@ img {
   .ref-greg {
     grid-column: 3;
     grid-row: 1;
-    text-align: left;
+    text-align: start;
   }
   .ref-tag {
     grid-column: 4;

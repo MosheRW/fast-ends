@@ -2,9 +2,9 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'End of the Fast — live countdown',
+  title: 'צאת הצום · End of the Fast',
   description:
-    'A live countdown to the end of the Jewish fast (nightfall) for your location, with all major tzeit opinions. On other days: the next fast and today’s Hebrew date.',
+    'ספירה לאחור חיה לסיום הצום (צאת הכוכבים) לפי מיקומכם, עם כל שיטות צאת הכוכבים. A live countdown to the end of the Jewish fast for your location.',
 };
 
 export const viewport: Viewport = {
@@ -16,7 +16,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="he" dir="rtl" suppressHydrationWarning>
       <body>{children}</body>
     </html>
   );

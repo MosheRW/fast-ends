@@ -1,4 +1,5 @@
 import { HebrewCalendar, HDate, Zmanim, flags, Location } from '@hebcal/core';
+import type { Lang } from './i18n';
 
 /**
  * Pure, framework-free fast logic shared by the server (build-time reference
@@ -14,53 +15,72 @@ import { HebrewCalendar, HDate, Zmanim, flags, Location } from '@hebcal/core';
 
 const FAST_MASK = flags.MINOR_FAST | flags.MAJOR_FAST;
 
-// hebcal's stable English `desc` -> friendlier display name.
-const DISPLAY: Record<string, string> = {
-  'Tzom Gedaliah': 'Fast of Gedaliah',
-  "Asara B'Tevet": 'Tenth of Tevet',
-  "Ta'anit Esther": 'Fast of Esther',
-  "Ta'anit Bechorot": 'Fast of the Firstborn',
-  'Tzom Tammuz': 'Seventeenth of Tammuz',
-  "Tish'a B'Av": "Tisha B'Av",
-  'Yom Kippur': 'Yom Kippur',
+type Bi = { he: string; en: string };
+
+// hebcal's stable English `desc` -> bilingual display name.
+const FAST_NAMES: Record<string, Bi> = {
+  'Tzom Gedaliah': { he: 'צום גדליה', en: 'Fast of Gedaliah' },
+  "Asara B'Tevet": { he: 'עשרה בטבת', en: 'Tenth of Tevet' },
+  "Ta'anit Esther": { he: 'תענית אסתר', en: 'Fast of Esther' },
+  "Ta'anit Bechorot": { he: 'תענית בכורות', en: 'Fast of the Firstborn' },
+  'Tzom Tammuz': { he: 'שבעה עשר בתמוז', en: 'Seventeenth of Tammuz' },
+  "Tish'a B'Av": { he: 'תשעה באב', en: "Tisha B'Av" },
+  'Yom Kippur': { he: 'יום כיפור', en: 'Yom Kippur' },
 };
+
+export function fastName(desc: string, lang: Lang): string {
+  const n = FAST_NAMES[desc];
+  return n ? n[lang] : desc;
+}
 
 /** A halachic opinion for when nightfall (tzeit / end of fast) occurs. */
 export type TzeitOpinion = {
   id: string;
-  short: string;
-  label: string;
-  note: string;
+  short: Bi;
+  label: Bi;
+  note: Bi;
   compute: (z: Zmanim) => Date;
 };
 
 export const OPINIONS: TzeitOpinion[] = [
   {
     id: 'stars3',
-    short: '3 stars',
-    label: '3 stars · 8.5°',
-    note: 'Sun 8.5° below the horizon — three small stars. A common, mainstream tzeit.',
+    short: { he: '3 כוכבים', en: '3 stars' },
+    label: { he: '3 כוכבים · 8.5°', en: '3 stars · 8.5°' },
+    note: {
+      he: 'השמש 8.5° מתחת לאופק — שלושה כוכבים קטנים. שיטה מקובלת ונפוצה.',
+      en: 'Sun 8.5° below the horizon — three small stars. A common, mainstream tzeit.',
+    },
     compute: (z) => z.tzeit(8.5),
   },
   {
     id: 'medium',
-    short: '3 medium stars',
-    label: '3 medium stars · 7.083°',
-    note: 'Sun 7.083° below the horizon — three medium stars (a little earlier).',
+    short: { he: '3 בינוניים', en: '3 medium stars' },
+    label: { he: '3 כוכבים בינוניים · 7.083°', en: '3 medium stars · 7.083°' },
+    note: {
+      he: 'השמש 7.083° מתחת לאופק — שלושה כוכבים בינוניים (מעט מוקדם יותר).',
+      en: 'Sun 7.083° below the horizon — three medium stars (a little earlier).',
+    },
     compute: (z) => z.tzeit(7.083),
   },
   {
     id: 'min42',
-    short: '42 minutes',
-    label: '42 min after sunset',
-    note: 'A widely used fixed-time custom: 42 minutes after sunset.',
+    short: { he: '42 דקות', en: '42 minutes' },
+    label: { he: '42 דקות אחרי השקיעה', en: '42 min after sunset' },
+    note: {
+      he: 'שיטת זמן קבוע נפוצה: 42 דקות אחרי השקיעה.',
+      en: 'A widely used fixed-time custom: 42 minutes after sunset.',
+    },
     compute: (z) => z.sunsetOffset(42, true),
   },
   {
     id: 'rt72',
-    short: 'Rabbeinu Tam',
-    label: 'Rabbeinu Tam · 72 min',
-    note: 'Stringent — 72 minutes after sunset.',
+    short: { he: 'רבנו תם', en: 'Rabbeinu Tam' },
+    label: { he: 'רבנו תם · 72 דקות', en: 'Rabbeinu Tam · 72 min' },
+    note: {
+      he: 'מחמיר — 72 דקות אחרי השקיעה.',
+      en: 'Stringent — 72 minutes after sunset.',
+    },
     compute: (z) => z.sunsetOffset(72, true),
   },
 ];
@@ -71,18 +91,18 @@ export function opinionById(id: string): TzeitOpinion {
   return OPINIONS.find((o) => o.id === id) ?? OPINIONS[0];
 }
 
-export type FastEnd = {
-  id: string;
-  short: string;
-  label: string;
-  note: string;
-  time: Date;
-};
+/** Localized display text for an opinion id. */
+export function opinionText(id: string, lang: Lang): { short: string; label: string; note: string } {
+  const o = opinionById(id);
+  return { short: o.short[lang], label: o.label[lang], note: o.note[lang] };
+}
+
+export type FastEnd = { id: string; time: Date };
 
 export type FastOccurrence = {
   key: string;
-  name: string;
-  hebrewDate: string;
+  desc: string;
+  hebrew: Bi;
   gregDate: Date;
   isMajor: boolean;
   /** When the fast begins. */
@@ -124,18 +144,14 @@ export function getFastOccurrences(loc: Location, from: Date, to: Date): FastOcc
       start = dayZ.alotHaShachar();
     }
 
-    const ends: FastEnd[] = OPINIONS.map((o) => ({
-      id: o.id,
-      short: o.short,
-      label: o.label,
-      note: o.note,
-      time: o.compute(dayZ),
-    })).sort((a, b) => a.time.getTime() - b.time.getTime());
+    const ends: FastEnd[] = OPINIONS.map((o) => ({ id: o.id, time: o.compute(dayZ) })).sort(
+      (a, b) => a.time.getTime() - b.time.getTime(),
+    );
 
     out.push({
       key: `${desc}-${gregDate.toISOString().slice(0, 10)}`,
-      name: DISPLAY[desc] ?? desc,
-      hebrewDate: ev.getDate().render('en'),
+      desc,
+      hebrew: { he: ev.getDate().render('he'), en: ev.getDate().render('en') },
       gregDate,
       isMajor,
       start,
@@ -177,9 +193,9 @@ export function computeState(loc: Location, now: Date): ViewState {
 
 export const OCCURRENCE_WINDOW = { back: 2 * DAY, forward: 400 * DAY };
 
-/** Today's Hebrew date, e.g. "3rd of Tishrei, 5787". */
-export function hebrewDateString(now: Date): string {
-  return new HDate(now).render('en');
+/** Today's Hebrew date in the chosen language, e.g. "3rd of Tishrei, 5787". */
+export function hebrewDateString(now: Date, lang: Lang): string {
+  return new HDate(now).render(lang);
 }
 
 /** Sunset & nightfall (primary opinion) for a plain, non-fast day. */
@@ -191,8 +207,8 @@ export function sunTimes(loc: Location, now: Date, opinionId: string) {
 // ---- Date-only helpers for the static, location-independent reference table ----
 
 export type FastDateInfo = {
-  name: string;
-  hebrewDate: string;
+  desc: string;
+  hebrew: Bi;
   gregDate: Date;
   isMajor: boolean;
 };
@@ -201,8 +217,8 @@ export function getFastDates(from: Date, to: Date): FastDateInfo[] {
   const out: FastDateInfo[] = [];
   for (const ev of fastEvents(from, to)) {
     out.push({
-      name: DISPLAY[ev.getDesc()] ?? ev.getDesc(),
-      hebrewDate: ev.getDate().render('en'),
+      desc: ev.getDesc(),
+      hebrew: { he: ev.getDate().render('he'), en: ev.getDate().render('en') },
       gregDate: ev.getDate().greg(),
       isMajor: Boolean(ev.getFlags() & flags.MAJOR_FAST),
     });

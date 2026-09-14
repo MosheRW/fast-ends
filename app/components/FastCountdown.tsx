@@ -3,29 +3,31 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   StoredLocation,
+  DEFAULT_LOCATION,
   fromCoords,
-  fromCity,
+  resolveCity,
   toLocation,
   locationLabel,
-  CITY_NAMES,
+  cityOptions,
 } from '@/lib/location';
 import {
-  OPINIONS,
   DEFAULT_OPINION,
   getFastOccurrences,
   pickState,
   hebrewDateString,
   sunTimes,
+  fastName,
+  opinionText,
+  OPINIONS,
   OCCURRENCE_WINDOW,
   type FastOccurrence,
   type FastEnd,
 } from '@/lib/fasts';
 import { formatClock, formatDay, formatCountdown, formatUntil } from '@/lib/format';
+import { useLang } from './lang';
 
 const LS_LOC = 'eotf.location';
 const LS_OP = 'eotf.opinion';
-
-type GeoStatus = 'idle' | 'locating' | 'ready' | 'denied' | 'unsupported';
 
 type Overrides = { date?: Date; loc?: StoredLocation };
 
@@ -42,25 +44,29 @@ function readOverrides(): Overrides {
   const lat = parseFloat(q.get('lat') ?? '');
   const lon = parseFloat(q.get('lon') ?? '');
   if (!Number.isNaN(lat) && !Number.isNaN(lon)) {
-    out.loc = fromCoords(lat, lon, 'manual', q.get('city') ?? 'Test location');
+    const name = q.get('city') ?? undefined;
+    out.loc = { ...fromCoords(lat, lon, 'manual', name), nameHe: name };
   }
   return out;
 }
 
 export default function FastCountdown() {
+  const { lang, t, toggle } = useLang();
+
   const [mounted, setMounted] = useState(false);
-  const [loc, setLoc] = useState<StoredLocation | null>(null);
-  const [status, setStatus] = useState<GeoStatus>('idle');
+  const [loc, setLoc] = useState<StoredLocation>(DEFAULT_LOCATION);
   const [opinionId, setOpinionId] = useState<string>(DEFAULT_OPINION);
   const [nowMs, setNowMs] = useState<number>(() => Date.now());
   const [showManual, setShowManual] = useState(false);
   const [manualInput, setManualInput] = useState('');
   const [manualError, setManualError] = useState('');
+  const [geoBusy, setGeoBusy] = useState(false);
 
   const offsetRef = useRef(0); // dev date offset (ms)
-  const anchorRef = useRef(Date.now()); // stable anchor for occurrence window
+  const anchorRef = useRef(Date.now()); // stable anchor for the occurrence window
 
-  // Mount: restore prefs, apply overrides, start locating.
+  // Mount: restore prefs, apply overrides; otherwise keep the Jerusalem default
+  // so a newcomer immediately sees a live countdown.
   useEffect(() => {
     setMounted(true);
     const ov = readOverrides();
@@ -75,20 +81,15 @@ export default function FastCountdown() {
     }
     if (ov.loc) {
       setLoc(ov.loc);
-      setStatus('ready');
       return;
     }
-    let saved: StoredLocation | null = null;
     try {
       const s = localStorage.getItem(LS_LOC);
-      if (s) saved = JSON.parse(s) as StoredLocation;
+      if (s) {
+        const saved = JSON.parse(s) as StoredLocation;
+        if (typeof saved.lat === 'number') setLoc(saved);
+      }
     } catch {}
-    if (saved && typeof saved.lat === 'number') {
-      setLoc(saved);
-      setStatus('ready');
-      return;
-    }
-    requestGeo();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -98,33 +99,33 @@ export default function FastCountdown() {
     return () => clearInterval(id);
   }, []);
 
+  function persistLoc(s: StoredLocation) {
+    try {
+      localStorage.setItem(LS_LOC, JSON.stringify(s));
+    } catch {}
+  }
+
   function requestGeo() {
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
-      setStatus('unsupported');
-      setShowManual(true);
+      setManualError(t('locUnavailable'));
       return;
     }
-    setStatus('locating');
+    setGeoBusy(true);
+    setManualError('');
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const s = fromCoords(pos.coords.latitude, pos.coords.longitude, 'geo');
         persistLoc(s);
         setLoc(s);
-        setStatus('ready');
+        setGeoBusy(false);
         setShowManual(false);
       },
       () => {
-        setStatus('denied');
-        setShowManual(true);
+        setGeoBusy(false);
+        setManualError(t('locUnavailable'));
       },
       { enableHighAccuracy: false, timeout: 10000, maximumAge: 600000 },
     );
-  }
-
-  function persistLoc(s: StoredLocation) {
-    try {
-      localStorage.setItem(LS_LOC, JSON.stringify(s));
-    } catch {}
   }
 
   function chooseOpinion(id: string) {
@@ -145,138 +146,108 @@ export default function FastCountdown() {
       const lon = parseFloat(m[2]);
       s = lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180 ? fromCoords(lat, lon, 'manual') : null;
     } else {
-      s = fromCity(raw);
+      s = resolveCity(raw);
     }
     if (!s) {
-      setManualError('Not found. Try a listed city, or enter "latitude, longitude".');
+      setManualError(t('notFound'));
       return;
     }
     setManualError('');
     setManualInput('');
     persistLoc(s);
     setLoc(s);
-    setStatus('ready');
     setShowManual(false);
   }
 
   const now = useMemo(() => new Date(nowMs), [nowMs]);
-  const hebLoc = useMemo(() => (loc ? toLocation(loc) : null), [loc]);
+  const hebLoc = useMemo(() => toLocation(loc), [loc]);
 
   // Expensive: compute occurrences once per location (stable anchor).
   const occs = useMemo<FastOccurrence[]>(() => {
-    if (!hebLoc) return [];
     const a = anchorRef.current;
     return getFastOccurrences(hebLoc, new Date(a - OCCURRENCE_WINDOW.back), new Date(a + OCCURRENCE_WINDOW.forward));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hebLoc]);
 
-  const view = useMemo(() => (occs.length || hebLoc ? pickState(occs, now) : null), [occs, hebLoc, now]);
+  const view = useMemo(() => pickState(occs, now), [occs, now]);
 
-  // ---------- render ----------
-
-  if (!mounted) {
-    return (
-      <main className="stage">
-        <div className="card center">
-          <p className="muted">Loading…</p>
-        </div>
-      </main>
-    );
-  }
-
-  const locBar = loc ? (
+  const locBar = (
     <div className="locbar">
       <span className="pin" aria-hidden>
         📍
       </span>
-      <span>{locationLabel(loc)}</span>
+      <span>{locationLabel(loc, lang)}</span>
       <button className="link" onClick={() => setShowManual((v) => !v)}>
-        change
+        {t('change')}
       </button>
     </div>
-  ) : null;
+  );
 
-  const manualForm = (
-    <form className="manual" onSubmit={submitManual}>
-      <label htmlFor="loc-input" className="muted small">
-        Enter a city or “latitude, longitude”
-      </label>
-      <div className="manual-row">
-        <input
-          id="loc-input"
-          list="cities"
-          value={manualInput}
-          onChange={(e) => setManualInput(e.target.value)}
-          placeholder="e.g. Jerusalem  ·  40.71, -74.01"
-          autoComplete="off"
-        />
-        <button type="submit" className="btn">
-          Set
+  const panel = (
+    <div className="card">
+      <form className="manual" onSubmit={submitManual}>
+        <label htmlFor="loc-input" className="muted small">
+          {t('enterCityLabel')}
+        </label>
+        <div className="manual-row">
+          <input
+            id="loc-input"
+            list="cities"
+            value={manualInput}
+            onChange={(e) => setManualInput(e.target.value)}
+            placeholder={t('placeholder')}
+            autoComplete="off"
+          />
+          <button type="submit" className="btn">
+            {t('setBtn')}
+          </button>
+        </div>
+        <datalist id="cities">
+          {cityOptions(lang).map((c) => (
+            <option key={c} value={c} />
+          ))}
+        </datalist>
+        <button type="button" className="link loc-link" onClick={requestGeo} disabled={geoBusy}>
+          📍 {geoBusy ? t('locating') : t('useMyLocation')}
         </button>
-      </div>
-      <datalist id="cities">
-        {CITY_NAMES.map((c) => (
-          <option key={c} value={c} />
-        ))}
-      </datalist>
-      {status !== 'ready' && (
-        <button type="button" className="link" onClick={requestGeo}>
-          Use my device location
-        </button>
-      )}
-      {manualError && <p className="error small">{manualError}</p>}
-    </form>
+        {manualError && <p className="error small">{manualError}</p>}
+      </form>
+    </div>
   );
 
   return (
     <main className="stage">
       <div className="stars" aria-hidden />
       <div className="content">
+        <button className="lang-toggle" onClick={toggle} aria-label="language">
+          {t('langOther')}
+        </button>
         <header className="head">
-          <h1 className="brand">End of the Fast</h1>
-          <p className="hebdate" aria-live="polite">
-            {hebrewDateString(now)}
-          </p>
+          <h1 className="brand">{t('brand')}</h1>
+          {mounted && (
+            <p className="hebdate" aria-live="polite">
+              {hebrewDateString(now, lang)}
+            </p>
+          )}
           {locBar}
         </header>
 
-        {showManual && <div className="card">{manualForm}</div>}
+        {showManual && panel}
 
-        {status === 'locating' && !loc && (
+        {!mounted ? (
           <div className="card center">
-            <p className="big-msg">Finding your location…</p>
-            <p className="muted small">Allow location access for times based on where you are.</p>
-            <button className="link" onClick={() => setShowManual(true)}>
-              Or enter it manually
-            </button>
+            <p className="muted">{t('loading')}</p>
           </div>
-        )}
-
-        {(status === 'denied' || status === 'unsupported') && !loc && !showManual && (
-          <div className="card center">
-            <p className="big-msg">Location unavailable</p>
-            <button className="btn" onClick={() => setShowManual(true)}>
-              Enter a location
-            </button>
-          </div>
-        )}
-
-        {loc && view && view.kind === 'active' && (
+        ) : view.kind === 'active' ? (
           <ActiveFast occ={view.occ} nowMs={nowMs} tzid={loc.tzid} opinionId={opinionId} onOpinion={chooseOpinion} />
-        )}
-        {loc && view && view.kind === 'pre' && (
+        ) : view.kind === 'pre' ? (
           <PreFast occ={view.occ} nowMs={nowMs} tzid={loc.tzid} opinionId={opinionId} onOpinion={chooseOpinion} />
-        )}
-        {loc && view && view.kind === 'none' && (
+        ) : (
           <NoFast next={view.next} nowMs={nowMs} now={now} loc={loc} opinionId={opinionId} onOpinion={chooseOpinion} />
         )}
 
         <footer className="foot">
-          <p className="muted small">
-            Times are computed for guidance only — confirm with your local halachic authority.
-            Nightfall opinions shown: three stars (8.5°), three medium stars (7.083°), 42 minutes,
-            and Rabbeinu Tam (72 minutes). Daylight-saving and elevation can shift times by a few minutes.
-          </p>
+          <p className="muted small">{t('disclaimer')}</p>
         </footer>
       </div>
     </main>
@@ -298,12 +269,14 @@ function OpinionGrid({
   opinionId: string;
   onOpinion: (id: string) => void;
 }) {
+  const { lang } = useLang();
   return (
-    <div className="opinions" role="radiogroup" aria-label="Nightfall opinion">
+    <div className="opinions" role="radiogroup" aria-label="tzeit">
       {ends.map((e) => {
         const remaining = e.time.getTime() - nowMs;
         const selected = e.id === opinionId;
         const past = remaining <= 0;
+        const txt = opinionText(e.id, lang);
         return (
           <button
             key={e.id}
@@ -311,11 +284,11 @@ function OpinionGrid({
             aria-checked={selected}
             className={`opinion${selected ? ' selected' : ''}${past ? ' past' : ''}`}
             onClick={() => onOpinion(e.id)}
-            title={e.note}
+            title={txt.note}
           >
-            <span className="op-label">{e.label}</span>
-            <span className="op-time">{formatClock(e.time, tzid)}</span>
-            <span className="op-status">{past ? 'ended' : formatCountdown(remaining)}</span>
+            <span className="op-label">{txt.label}</span>
+            <span className="op-time">{formatClock(e.time, tzid, lang)}</span>
+            <span className="op-status">{past ? '—' : formatCountdown(remaining)}</span>
           </button>
         );
       })}
@@ -338,37 +311,46 @@ function ActiveFast({
   opinionId: string;
   onOpinion: (id: string) => void;
 }) {
+  const { lang, t } = useLang();
   const selected = occ.ends.find((e) => e.id === opinionId) ?? occ.ends[0];
   const remaining = selected.time.getTime() - nowMs;
   const nextUnpassed = occ.ends.find((e) => e.time.getTime() > nowMs);
+  const selShort = opinionText(selected.id, lang).short;
 
   return (
     <section className="card fast-active">
-      <p className="eyebrow">Fast in progress</p>
-      <h2 className="fast-name">{occ.name}</h2>
+      <p className="eyebrow">{t('fastInProgress')}</p>
+      <h2 className="fast-name">{fastName(occ.desc, lang)}</h2>
 
       {remaining > 0 ? (
         <>
-          <p className="cd-label">Ends in ({selected.short})</p>
+          <p className="cd-label">
+            {t('endsIn')} ({selShort})
+          </p>
           <div className="countdown" role="timer" aria-live="off">
             {formatCountdown(remaining)}
           </div>
-          <p className="cd-sub">Nightfall at {formatClock(selected.time, tzid)}</p>
+          <p className="cd-sub">{t('nightfallAt', { t: formatClock(selected.time, tzid, lang) })}</p>
         </>
       ) : (
         <>
-          <p className="cd-label">According to {selected.short}</p>
-          <div className="countdown done">The fast has ended 🌙</div>
+          <p className="cd-label">{t('accordingTo', { op: selShort })}</p>
+          <div className="countdown done">{t('fastEnded')}</div>
           {nextUnpassed && (
             <p className="cd-sub">
-              A later opinion ({nextUnpassed.short}) ends in {formatCountdown(nextUnpassed.time.getTime() - nowMs)}.
+              {t('laterOpinion', {
+                op: opinionText(nextUnpassed.id, lang).short,
+                cd: formatCountdown(nextUnpassed.time.getTime() - nowMs),
+              })}
             </p>
           )}
         </>
       )}
 
       <OpinionGrid ends={occ.ends} nowMs={nowMs} tzid={tzid} opinionId={opinionId} onOpinion={onOpinion} />
-      <p className="muted small start-note">Fast began {formatDay(occ.start, tzid)} at {formatClock(occ.start, tzid)}.</p>
+      <p className="muted small start-note">
+        {t('fastBegan', { day: formatDay(occ.start, tzid, lang), t: formatClock(occ.start, tzid, lang) })}
+      </p>
     </section>
   );
 }
@@ -388,17 +370,20 @@ function PreFast({
   opinionId: string;
   onOpinion: (id: string) => void;
 }) {
+  const { lang, t } = useLang();
   const remaining = occ.start.getTime() - nowMs;
   return (
     <section className="card fast-pre">
-      <p className="eyebrow">Coming up</p>
-      <h2 className="fast-name">{occ.name}</h2>
-      <p className="cd-label">Fast begins in</p>
+      <p className="eyebrow">{t('comingUp')}</p>
+      <h2 className="fast-name">{fastName(occ.desc, lang)}</h2>
+      <p className="cd-label">{t('fastBeginsIn')}</p>
       <div className="countdown begin" role="timer" aria-live="off">
         {formatCountdown(remaining)}
       </div>
-      <p className="cd-sub">Begins {formatDay(occ.start, tzid)} at {formatClock(occ.start, tzid)}</p>
-      <p className="muted small">Nightfall (end of fast) times:</p>
+      <p className="cd-sub">
+        {t('beginsAt', { day: formatDay(occ.start, tzid, lang), t: formatClock(occ.start, tzid, lang) })}
+      </p>
+      <p className="muted small">{t('nightfallTimes')}</p>
       <OpinionGrid ends={occ.ends} nowMs={nowMs} tzid={tzid} opinionId={opinionId} onOpinion={onOpinion} />
     </section>
   );
@@ -421,35 +406,36 @@ function NoFast({
   opinionId: string;
   onOpinion: (id: string) => void;
 }) {
+  const { lang, t } = useLang();
   const sun = useMemo(() => sunTimes(toLocation(loc), now, opinionId), [loc, nowMs, opinionId]);
   return (
     <section className="card fast-none">
-      <p className="eyebrow">Today</p>
-      <h2 className="fast-name calm">No fast today</h2>
-      <p className="cd-sub">{formatDay(now, loc.tzid)}</p>
+      <p className="eyebrow">{t('today')}</p>
+      <h2 className="fast-name calm">{t('noFastToday')}</h2>
+      <p className="cd-sub">{formatDay(now, loc.tzid, lang)}</p>
 
       <div className="suntimes">
         <div className="sun-cell">
-          <span className="op-label">Sunset</span>
-          <span className="op-time">{formatClock(sun.sunset, loc.tzid)}</span>
+          <span className="op-label">{t('sunset')}</span>
+          <span className="op-time">{formatClock(sun.sunset, loc.tzid, lang)}</span>
         </div>
         <div className="sun-cell">
-          <span className="op-label">Nightfall</span>
-          <span className="op-time">{formatClock(sun.nightfall, loc.tzid)}</span>
+          <span className="op-label">{t('nightfall')}</span>
+          <span className="op-time">{formatClock(sun.nightfall, loc.tzid, lang)}</span>
         </div>
       </div>
 
       <div className="opinion-picker">
-        <span className="muted small">Nightfall opinion:</span>
+        <span className="muted small">{t('nightfallOpinion')}</span>
         <div className="chips">
           {OPINIONS.map((o) => (
             <button
               key={o.id}
               className={`chip${o.id === opinionId ? ' selected' : ''}`}
               onClick={() => onOpinion(o.id)}
-              title={o.note}
+              title={o.note[lang]}
             >
-              {o.short}
+              {o.short[lang]}
             </button>
           ))}
         </div>
@@ -457,17 +443,20 @@ function NoFast({
 
       {next && (
         <div className="next-fast">
-          <p className="eyebrow">Next fast</p>
-          <h3 className="next-name">{next.name}</h3>
+          <p className="eyebrow">{t('nextFast')}</p>
+          <h3 className="next-name">{fastName(next.desc, lang)}</h3>
           <p className="cd-sub">
-            {next.hebrewDate} · {formatDay(next.start, loc.tzid)} · {formatUntil(next.start.getTime() - nowMs)}
+            {(lang === 'he' ? next.hebrew.he : next.hebrew.en)} · {formatDay(next.start, loc.tzid, lang)} ·{' '}
+            {formatUntil(next.start.getTime() - nowMs, lang)}
           </p>
           <div className="countdown small-cd" role="timer" aria-live="off">
             {formatCountdown(next.start.getTime() - nowMs)}
           </div>
           <p className="muted small">
-            Begins at {formatClock(next.start, loc.tzid)} · ends around{' '}
-            {formatClock((next.ends.find((e) => e.id === opinionId) ?? next.ends[0]).time, loc.tzid)}
+            {t('beginsEndsAround', {
+              a: formatClock(next.start, loc.tzid, lang),
+              b: formatClock((next.ends.find((e) => e.id === opinionId) ?? next.ends[0]).time, loc.tzid, lang),
+            })}
           </p>
         </div>
       )}

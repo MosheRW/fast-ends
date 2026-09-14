@@ -1,34 +1,43 @@
+import { intlLocale, type Lang } from './i18n';
+
 /** Time & duration formatting helpers. */
 
-// Force English formatting so the (English) UI stays consistent regardless of
-// the device's OS locale.
-const LOCALE = 'en';
-
-/** A local clock time at a given IANA timezone, e.g. "8:13 PM". */
-export function formatClock(date: Date, tzid: string): string {
+/** A local clock time at a given IANA timezone, e.g. "8:13 PM" / "20:13". */
+export function formatClock(date: Date, tzid: string, lang: Lang): string {
   try {
-    return new Intl.DateTimeFormat(LOCALE, {
+    return new Intl.DateTimeFormat(intlLocale(lang), {
       hour: 'numeric',
       minute: '2-digit',
       timeZone: tzid,
     }).format(date);
   } catch {
-    return new Intl.DateTimeFormat(LOCALE, { hour: 'numeric', minute: '2-digit' }).format(date);
+    return new Intl.DateTimeFormat(intlLocale(lang), { hour: 'numeric', minute: '2-digit' }).format(date);
   }
 }
 
 /** A weekday + date at a given timezone, e.g. "Tue, Sep 15". */
-export function formatDay(date: Date, tzid?: string): string {
+export function formatDay(date: Date, tzid: string | undefined, lang: Lang): string {
+  const opts: Intl.DateTimeFormatOptions = {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    timeZone: tzid,
+  };
   try {
-    return new Intl.DateTimeFormat(LOCALE, {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-      timeZone: tzid,
-    }).format(date);
+    return new Intl.DateTimeFormat(intlLocale(lang), opts).format(date);
   } catch {
-    return new Intl.DateTimeFormat(LOCALE, { weekday: 'short', month: 'short', day: 'numeric' }).format(date);
+    return new Intl.DateTimeFormat(intlLocale(lang), { ...opts, timeZone: undefined }).format(date);
   }
+}
+
+/** A full date, e.g. "Mon, Sep 14, 2026". */
+export function formatFullDate(date: Date, lang: Lang): string {
+  return new Intl.DateTimeFormat(intlLocale(lang), {
+    weekday: 'short',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  }).format(date);
 }
 
 export type Parts = { neg: boolean; days: number; h: number; m: number; s: number };
@@ -47,17 +56,28 @@ export function splitDuration(ms: number): Parts {
 
 const p2 = (n: number) => String(n).padStart(2, '0');
 
-/** "07:42:15", or "1:07:42:15" when a day or more remains. */
+/** "07:42:15", or "1:07:42:15" when a day or more remains. (Always LTR digits.) */
 export function formatCountdown(ms: number): string {
   const { days, h, m, s } = splitDuration(ms);
-  const hh = days > 0 ? `${days}:${p2(h)}` : String(h);
-  return `${days > 0 ? hh : p2(h)}:${p2(m)}:${p2(s)}`;
+  if (days > 0) return `${days}:${p2(h)}:${p2(m)}:${p2(s)}`;
+  return `${p2(h)}:${p2(m)}:${p2(s)}`;
 }
 
-/** Coarser phrasing for far-off events, e.g. "in 3 days" / "in 5 hours". */
-export function formatUntil(ms: number): string {
+/** Coarser phrasing for far-off events, localized (e.g. "in 3 days" / "בעוד 3 ימים"). */
+export function formatUntil(ms: number, lang: Lang): string {
   const { days, h, m } = splitDuration(ms);
-  if (days >= 1) return `in ${days} day${days === 1 ? '' : 's'}`;
-  if (h >= 1) return `in ${h} hour${h === 1 ? '' : 's'}`;
-  return `in ${Math.max(1, m)} minute${m === 1 ? '' : 's'}`;
+  const inWord = lang === 'he' ? 'בעוד' : 'in';
+  let n: number;
+  let unit: string;
+  if (days >= 1) {
+    n = days;
+    unit = lang === 'he' ? (days === 1 ? 'יום' : 'ימים') : days === 1 ? 'day' : 'days';
+  } else if (h >= 1) {
+    n = h;
+    unit = lang === 'he' ? (h === 1 ? 'שעה' : 'שעות') : h === 1 ? 'hour' : 'hours';
+  } else {
+    n = Math.max(1, m);
+    unit = lang === 'he' ? (n === 1 ? 'דקה' : 'דקות') : n === 1 ? 'minute' : 'minutes';
+  }
+  return `${inWord} ${n} ${unit}`;
 }
