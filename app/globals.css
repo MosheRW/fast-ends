@@ -271,6 +271,8 @@ img {
   margin: 6px 0 8px;
   word-break: keep-all;
   direction: ltr; /* keep HH:MM:SS left-to-right even in RTL layout */
+  user-select: none;
+  cursor: zoom-in; /* double-click toggles full-screen */
 }
 .countdown.begin {
   color: var(--accent-2);
@@ -541,6 +543,12 @@ img {
 }
 
 /* ===== full-screen focus mode ===== */
+/* Hide everything behind the overlay so the "next fasts" feed can't show or be
+   scrolled into view (even in full-page captures). */
+:root.focus-active .content,
+:root.focus-active .reference {
+  display: none !important;
+}
 .focus {
   position: fixed;
   inset: 0;
@@ -559,30 +567,62 @@ img {
   inset-inline-end: max(14px, env(safe-area-inset-right));
   z-index: 2;
 }
+/* Almost-hidden landscape/portrait toggle (mobile fullscreen only). */
+.focus-orient {
+  position: absolute;
+  bottom: max(14px, env(safe-area-inset-bottom));
+  inset-inline-start: max(14px, env(safe-area-inset-left));
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  opacity: 0.22;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+.focus-orient:hover,
+.focus-orient:active,
+.focus-orient:focus-visible {
+  opacity: 0.85;
+}
 .focus-inner {
   position: relative;
   z-index: 1;
   text-align: center;
   display: flex;
   flex-direction: column;
-  gap: clamp(8px, 2vw, 18px);
+  align-items: center;
+  justify-content: center;
+  gap: clamp(10px, 2.5vh, 28px);
+  width: 100%;
   max-width: 100%;
+  user-select: none;
+  cursor: zoom-out;
 }
 .focus-title {
-  font-size: clamp(1.4rem, 6vw, 2.4rem);
-  font-weight: 700;
+  font-size: clamp(1.8rem, 7vw, 5rem);
+  font-weight: 800;
+  line-height: 1.05;
   color: var(--ink);
 }
 .focus-label {
   color: var(--muted);
-  font-size: clamp(0.9rem, 3.5vw, 1.2rem);
+  font-size: clamp(1rem, 3.5vw, 1.6rem);
 }
 .focus-cd {
   direction: ltr;
   font-variant-numeric: tabular-nums;
   font-weight: 800;
-  line-height: 1;
-  font-size: clamp(3.5rem, 20vw, 11rem);
+  line-height: 0.95;
+  /* Fill the screen: scale with the smaller of width/height, capped. */
+  font-size: clamp(3.5rem, min(15vw, 34vh), 22rem);
   color: var(--accent);
   text-shadow: var(--cd-glow);
   word-break: keep-all;

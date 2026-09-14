@@ -66,6 +66,8 @@ export default function FastCountdown() {
   const [manualError, setManualError] = useState('');
   const [geoBusy, setGeoBusy] = useState(false);
   const [focus, setFocus] = useState(false);
+  const [orientSupported, setOrientSupported] = useState(false);
+  const [orient, setOrient] = useState<'landscape' | 'portrait'>('landscape');
 
   const offsetRef = useRef(0); // dev date offset (ms)
   const anchorRef = useRef(Date.now()); // stable anchor for the occurrence window
@@ -104,19 +106,58 @@ export default function FastCountdown() {
     return () => clearInterval(id);
   }, []);
 
-  // Full-screen focus mode.
-  function enterFocus() {
+  // Full-screen focus mode. On mobile, orientation locking (below) only works
+  // once the document is actually in fullscreen; it no-ops elsewhere (iOS/desktop).
+  async function lockOrientation(type: 'landscape' | 'portrait'): Promise<boolean> {
+    try {
+      const o = screen.orientation as (ScreenOrientation & { lock?: (t: string) => Promise<void> }) | undefined;
+      if (o && typeof o.lock === 'function') {
+        await o.lock(type);
+        return true;
+      }
+    } catch {}
+    return false;
+  }
+  async function enterFocus() {
     setFocus(true);
     try {
-      document.documentElement.requestFullscreen?.();
+      await (document.documentElement.requestFullscreen?.() ?? Promise.resolve()).catch(() => {});
     } catch {}
+    // Prefer landscape on mobile; show the rotate toggle only if it actually works.
+    const ok = await lockOrientation('landscape');
+    setOrientSupported(ok);
+    if (ok) setOrient('landscape');
   }
   function exitFocus() {
     setFocus(false);
+    setOrientSupported(false);
+    try {
+      (screen.orientation as unknown as { unlock?: () => void })?.unlock?.();
+    } catch {}
     try {
       if (document.fullscreenElement) document.exitFullscreen?.();
     } catch {}
   }
+  function toggleFocus() {
+    if (focus) exitFocus();
+    else enterFocus();
+  }
+  async function toggleOrientation() {
+    const next = orient === 'landscape' ? 'portrait' : 'landscape';
+    if (await lockOrientation(next)) setOrient(next);
+  }
+  // While in focus mode, hide the rest of the page (main content + the "next
+  // fasts" feed) and lock scroll, so nothing shows behind/around the overlay.
+  useEffect(() => {
+    if (!focus) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    document.documentElement.classList.add('focus-active');
+    return () => {
+      document.body.style.overflow = prev;
+      document.documentElement.classList.remove('focus-active');
+    };
+  }, [focus]);
   // Leaving browser fullscreen (e.g. via Esc) also leaves focus mode.
   useEffect(() => {
     const onFsChange = () => {
@@ -297,11 +338,11 @@ export default function FastCountdown() {
             <p className="muted">{t('loading')}</p>
           </div>
         ) : view.kind === 'active' ? (
-          <ActiveFast occ={view.occ} nowMs={nowMs} tzid={loc.tzid} opinionId={opinionId} onOpinion={chooseOpinion} />
+          <ActiveFast occ={view.occ} nowMs={nowMs} tzid={loc.tzid} opinionId={opinionId} onOpinion={chooseOpinion} onToggleFocus={toggleFocus} />
         ) : view.kind === 'pre' ? (
-          <PreFast occ={view.occ} nowMs={nowMs} tzid={loc.tzid} opinionId={opinionId} onOpinion={chooseOpinion} />
+          <PreFast occ={view.occ} nowMs={nowMs} tzid={loc.tzid} opinionId={opinionId} onOpinion={chooseOpinion} onToggleFocus={toggleFocus} />
         ) : (
-          <NoFast next={view.next} nowMs={nowMs} now={now} loc={loc} opinionId={opinionId} onOpinion={chooseOpinion} />
+          <NoFast next={view.next} nowMs={nowMs} now={now} loc={loc} opinionId={opinionId} onOpinion={chooseOpinion} onToggleFocus={toggleFocus} />
         )}
 
         <footer className="foot">
@@ -309,7 +350,15 @@ export default function FastCountdown() {
         </footer>
       </div>
 
-      {focus && primary && <FocusOverlay primary={primary} onClose={exitFocus} />}
+      {focus && primary && (
+        <FocusOverlay
+          primary={primary}
+          onClose={exitFocus}
+          onToggle={toggleFocus}
+          orientSupported={orientSupported}
+          onRotate={toggleOrientation}
+        />
+      )}
     </main>
   );
 }
@@ -349,7 +398,19 @@ function computePrimary(view: ViewState, opinionId: string, nowMs: number, t: TF
   return null;
 }
 
-function FocusOverlay({ primary, onClose }: { primary: Primary; onClose: () => void }) {
+function FocusOverlay({
+  primary,
+  onClose,
+  onToggle,
+  orientSupported,
+  onRotate,
+}: {
+  primary: Primary;
+  onClose: () => void;
+  onToggle: () => void;
+  orientSupported: boolean;
+  onRotate: () => void;
+}) {
   const { t } = useLang();
   return (
     <div className="focus" role="dialog" aria-modal="true">
@@ -357,13 +418,18 @@ function FocusOverlay({ primary, onClose }: { primary: Primary; onClose: () => v
       <button className="focus-exit icon-btn" onClick={onClose} aria-label={t('exit')} title={t('exit')}>
         ✕
       </button>
-      <div className="focus-inner">
-        <p className="focus-title">{primary.title}</p>
+      <div className="focus-inner" onDoubleClick={onToggle}>
+        <h2 className="focus-title">{primary.title}</h2>
         <p className="focus-label">{primary.label}</p>
         <div className="focus-cd" role="timer" aria-live="off">
           {primary.ended ? t('fastEnded') : formatCountdown(primary.ms)}
         </div>
       </div>
+      {orientSupported && (
+        <button className="focus-orient" onClick={onRotate} aria-label={t('rotate')} title={t('rotate')}>
+          ⟳
+        </button>
+      )}
     </div>
   );
 }
@@ -433,12 +499,14 @@ function ActiveFast({
   tzid,
   opinionId,
   onOpinion,
+  onToggleFocus,
 }: {
   occ: FastOccurrence;
   nowMs: number;
   tzid: string;
   opinionId: string;
   onOpinion: (id: string) => void;
+  onToggleFocus: () => void;
 }) {
   const { lang, t } = useLang();
   const selected = occ.ends.find((e) => e.id === opinionId) ?? occ.ends[0];
@@ -456,7 +524,7 @@ function ActiveFast({
           <p className="cd-label">
             {t('endsIn')} ({selShort})
           </p>
-          <div className="countdown" role="timer" aria-live="off">
+          <div className="countdown" role="timer" aria-live="off" onDoubleClick={onToggleFocus} title={t('fullscreenLabel')}>
             {formatCountdown(remaining)}
           </div>
           <p className="cd-sub">{t('nightfallAt', { t: formatClock(selected.time, tzid, lang) })}</p>
@@ -464,7 +532,9 @@ function ActiveFast({
       ) : (
         <>
           <p className="cd-label">{t('accordingTo', { op: selShort })}</p>
-          <div className="countdown done">{t('fastEnded')}</div>
+          <div className="countdown done" onDoubleClick={onToggleFocus} title={t('fullscreenLabel')}>
+            {t('fastEnded')}
+          </div>
           {nextUnpassed && (
             <p className="cd-sub">
               {t('laterOpinion', {
@@ -492,12 +562,14 @@ function PreFast({
   tzid,
   opinionId,
   onOpinion,
+  onToggleFocus,
 }: {
   occ: FastOccurrence;
   nowMs: number;
   tzid: string;
   opinionId: string;
   onOpinion: (id: string) => void;
+  onToggleFocus: () => void;
 }) {
   const { lang, t } = useLang();
   const remaining = occ.start.getTime() - nowMs;
@@ -506,7 +578,7 @@ function PreFast({
       <p className="eyebrow">{t('comingUp')}</p>
       <h2 className="fast-name">{fastName(occ.desc, lang)}</h2>
       <p className="cd-label">{t('fastBeginsIn')}</p>
-      <div className="countdown begin" role="timer" aria-live="off">
+      <div className="countdown begin" role="timer" aria-live="off" onDoubleClick={onToggleFocus} title={t('fullscreenLabel')}>
         {formatCountdown(remaining)}
       </div>
       <p className="cd-sub">
@@ -527,6 +599,7 @@ function NoFast({
   loc,
   opinionId,
   onOpinion,
+  onToggleFocus,
 }: {
   next: FastOccurrence | null;
   nowMs: number;
@@ -534,6 +607,7 @@ function NoFast({
   loc: StoredLocation;
   opinionId: string;
   onOpinion: (id: string) => void;
+  onToggleFocus: () => void;
 }) {
   const { lang, t } = useLang();
   const sun = useMemo(() => sunTimes(toLocation(loc), now, opinionId), [loc, nowMs, opinionId]);
@@ -578,7 +652,13 @@ function NoFast({
             {(lang === 'he' ? next.hebrew.he : next.hebrew.en)} · {formatDay(next.start, loc.tzid, lang)} ·{' '}
             {formatUntil(next.start.getTime() - nowMs, lang)}
           </p>
-          <div className="countdown small-cd" role="timer" aria-live="off">
+          <div
+            className="countdown small-cd"
+            role="timer"
+            aria-live="off"
+            onDoubleClick={onToggleFocus}
+            title={t('fullscreenLabel')}
+          >
             {formatCountdown(next.start.getTime() - nowMs)}
           </div>
           <p className="muted small">
